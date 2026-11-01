@@ -3,38 +3,44 @@ on: workflow_dispatch
 
 jobs:
   build:
-    # Sử dụng cấu hình Windows mới nhất của GitHub
     runs-on: windows-latest
 
     steps:
-    - name: 1. Cai dat va Cau hinh Tailscale vao mang luoi
+    - name: 1. Extract and Run Tailscale Portable
       shell: powershell
       run: |
-        # Tai phan mem Tailscale chinh thuc
-        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale-setup.exe"
-        # Cai dat ngam vao he thong
-        Start-Process .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
+        # Download the official stable Tailscale zip package
+        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale.zip" -UserAgent "Mozilla/5.0"
         
-        # Cho phan mem khoi dong va dang nhap vao tai khoan cua ban bang Auth Key
+        # Extract files natively
+        Expand-Archive -Path "tailscale.zip" -DestinationPath "C:\Tailscale" -Force
+        
+        # Locate the executable folder dynamically and start the Tailscale engine background service
+        $exePath = (Get-ChildItem -Path "C:\Tailscale" -Filter "tailscaled.exe" -Recurse).FullName
+        Start-Process $exePath -ArgumentList "--port 41641" -NoNewWindow
+        
+        # Wait 3 seconds for the engine to initialize, then bring up the connection tunnel using your Auth Key
+        Start-Sleep -Seconds 3
+        $cliPath = (Get-ChildItem -Path "C:\Tailscale" -Filter "tailscale.exe" -Recurse).FullName
         $env:TAILSCALE_AUTH_KEY = "${{ secrets.TAILSCALE_AUTH_KEY }}"
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
+        & $cliPath up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
         
     - name: 2. Kich hoat Remote Desktop va Cai mat khau dang nhap
       shell: powershell
       run: |
-        # Mo cong RDP mac dinh tren Windows Server cua GitHub
+        # Turn on native Windows Remote Desktop core
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         
-        # Thiet lap mat khau dang nhap tinh cho tai khoan Admin cua ban
-        # Mat khau truy cap se la: ChieNgamE2026!
+        # Set absolute user password for your phone/local PC connection
+        # Password is: ChieNgamE2026!
         $Password = ConvertTo-SecureString "ChieNgamE2026!" -AsPlainText -Force
         Set-LocalUser -Name "runneradmin" -Password $Password
         
     - name: 3. Duy tri may ao luon hoat dong de choi game
       shell: powershell
       run: |
-        Write-Host "May ao da ket noi vao mang Tailscale cua ban thanh cong!"
-        Write-Host "Ban co the bat ung dung Remote Desktop de truy cap ngay luon."
-        # Giu cho may ao chay lien tuc trong 6 tieng (21600 giay) khong bi tu ngat
+        Write-Host "May ao da vao mang Tailscale thanh cong!"
+        Write-Host "Hay bat ung dung Remote Desktop de ket noi."
+        # Keep runner alive for 6 hours
         Start-Sleep -Seconds 21600
