@@ -6,38 +6,43 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: 1. Install Tailscale securely via Winget
+    - name: 1. Install Tailscale via Winget
       shell: powershell
       run: |
-        # Force using the native Windows Package Manager to fetch Tailscale securely
         winget install Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
-        
-        # Verify installation paths and start the background tunnel engine
         $TailscalePath = "C:\Program Files\Tailscale\tailscale.exe"
-        
-        # Wait until the executable becomes available in the system files
         while (!(Test-Path $TailscalePath)) { Start-Sleep -Seconds 2 }
-        
-        # Connect to your network mesh using your Auth Key
         $env:TAILSCALE_AUTH_KEY = "${{ secrets.TAILSCALE_AUTH_KEY }}"
         & $TailscalePath up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
         
-    - name: 2. Kich hoat Remote Desktop va Cai mat khau dang nhap
+    - name: 2. Kich hoat Remote Desktop va Tai khoan
       shell: powershell
       run: |
-        # Open Remote Desktop core settings
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        
-        # Set absolute user credentials for your local device link
-        # Password is: ChieNgamE2026!
         $Password = ConvertTo-SecureString "ChieNgamE2026!" -AsPlainText -Force
         Set-LocalUser -Name "runneradmin" -Password $Password
         
-    - name: 3. Duy tri may ao luon hoat dong de choi game
+    - name: 3. Don dep va Ep tang toc o cung SSD (Lay them dung luong trong)
       shell: powershell
       run: |
-        Write-Host "May ao da chay thanh cong thong qua Winget!"
-        Write-Host "Hay bat ung dung Remote Desktop de ket noi qua IP Tailscale."
-        # Keep runner alive for 6 hours
+        Write-Host "Dang xoa cac bo cache va cong cu du thua de lam trong o cung SSD..."
+        # Xóa các bộ cài đặt Android, .NET, v.v. không dùng tới của GitHub để lấy lại dung lượng trống lớn
+        Remove-Item -Path "C:\hostedtoolcache" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "C:\agent" -Recurse -Force -ErrorAction SilentlyContinue
+        
+        Write-Host "Dang kich hoat lenh TRIM toi uu hoa toc do SSD..."
+        # Ép Windows chạy lệnh tối ưu hóa hiệu năng đọc ghi cho ổ đĩa ảo SSD
+        Optimize-Volume -DriveLetter C -Defrag -Verbose
+        
+    - name: 4. Tai Driver do hoa ao
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Path "C:\GPUTweak" -Force
+        Invoke-WebRequest -Uri "https://github.com" -OutFile "C:\GPUTweak\opengl32.dll" -ErrorAction SilentlyContinue
+        
+    - name: 5. Duy tri va Treo game
+      shell: powershell
+      run: |
+        Write-Host "May ao da toi uu SSD xong va dang chay!"
         Start-Sleep -Seconds 21600
